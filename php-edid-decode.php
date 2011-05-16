@@ -37,11 +37,14 @@ ob_implicit_flush();
  *   3. Web: Giving a file name as $_GET['fd']
  *          example: http://example.com/php-edid-decode.php?fd=data/apple-cinemahd-30-dvi
  *   4. Web: Giving a base64-encoded string as $_GET['raw64'] or $_POST['raw64']
- *   5. Library: Call EdidDecode::main($input), $input is a path to a binary EDID file 
+ *   5. Web: Giving a regedit-exported string as $_GET['regexport'] or $_POST['regexport']
+ *          note: EDIDs are located at locations like
+ *             HKLM\SYSTEM\CurrentControlSet\Enum\DISPLAY\*\*\Device Parameters
+ *   6. Library: Call EdidDecode::main($input), $input is a path to a binary EDID file 
  *          example:
  *            $edidDecode = new EdidDecode();
  *            $edidDecode->main('data/apple-cinemahd-30-dvi');
- *   6. Library: Call EdidDecode::main($input,true), $input is a binary EDID file
+ *   7. Library: Call EdidDecode::main($input,true), $input is a binary EDID file
  *          example:
  *            $edidDecode = new EdidDecode();
  *            $edidDecode->main($binaryEDIDString,true);
@@ -55,9 +58,15 @@ else if (isset($_GET['fd']) && is_readable($_GET['fd'])) {
 	$edidDecode = new EdidDecode();
 	$edidDecode->main($_GET['fd']);
 }
-else if (!empty($_REQUEST['raw64'])) {
+else if (!empty($_REQUEST['raw'])) {
 	$edidDecode = new EdidDecode();
-	$edidDecode->main(base64_decode($_REQUEST['raw64']),true);
+	
+	if (strpos($_REQUEST['raw'],'"EDID"=hex:') !== false) {
+		$input = EdidDecode::regedit_decode($_REQUEST['raw']);
+	} else {
+		$input = base64_decode($_REQUEST['raw']);
+	}
+	$edidDecode->main($input,true);
 }
 else if (isset($_REQUEST['showform'])) {
 	$self = $_SERVER['PHP_SELF'] . '?' . $_SERVER['QUERY_STRING'];
@@ -71,7 +80,7 @@ else if (isset($_REQUEST['showform'])) {
 <body>
 <form method=post action='$self'>
 	<label>Base64-encoded EDID string</label><br>
-	<textarea name=raw64 cols=80></textarea><br>
+	<textarea name=raw cols=80></textarea><br>
 	<input type=submit value=Decode>
 </form>
 </body>
@@ -1196,5 +1205,28 @@ END;
 		printf("Warning: CVT block does not set preferred refresh rate\n");
 		
 		return !$this->conformant;
+	}
+
+	/*
+	 * Parses EDIDs as exported by regedit -- 
+	 * [HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Enum\DISPLAY\DELD028\5&27bbed36&0&UID16777489\Device Parameters]
+	 * "EDID"=hex:00,ff,ff,ff,ff,ff,ff,00,10,ac,28,d0,4c,39,36,30,31,13,01,03,80,33,\
+	 *   1d,78,2e,ee,95,a3,54,4c,99,26,0f,50,54,a5,4b,00,71,4f,81,80,d1,c0,01,01,01,\
+	 *   01,01,01,01,01,01,01,02,3a,80,18,71,38,2d,40,58,2c,45,00,fd,1e,11,00,00,1e,\
+	 *   00,00,00,ff,00,4e,39,31,38,52,39,43,32,30,36,39,4c,0a,00,00,00,fc,00,44,45,\
+	 *   4c,4c,20,50,32,33,31,30,48,0a,20,00,00,00,fd,00,38,4c,1e,53,11,00,0a,20,20,\
+	 *   20,20,20,20,00,b2
+	 */	
+	static public function regedit_decode($string) {
+		$ret = '';
+
+		$string = substr($string,strpos($_REQUEST['raw'],'"EDID"=hex:')+11);
+		$string = preg_replace("/[^,0-9a-fA-F]/", "", $string);
+
+		foreach (explode(',',$string) as $c) {
+			$ret .=  chr(hexdec('0x'.$c));
+		}
+
+		return $ret;
 	}
 }
