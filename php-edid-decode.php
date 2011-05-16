@@ -1,9 +1,4 @@
 <?php
-error_reporting(E_ALL | E_STRICT);
-
-$edidDecode = new EdidDecode();
-$edidDecode->main('data/dell-2408wfp-dp');
-
 /*
 * Copyright 2006-2009 Red Hat, Inc.
 *
@@ -28,9 +23,66 @@ $edidDecode->main('data/dell-2408wfp-dp');
 /* Author: Adam Jackson <ajax@nwnk.net> */
 /* PHP-port by: Ben Claar <ben.claar@gmail.com> */
 
+error_reporting(E_ALL | E_STRICT);
+// Turn off output buffering
+while (@ob_end_flush());	
+ob_implicit_flush();
+
+/**
+ * Files can be input by (all paths absolute or relative to php-edit-decode.php):
+ *   1. CLI: Specifying a filepath as the first command line argument
+ *          example: php php-edid-decode.php data/apple-cinemahd-30-dvi
+ *   2. CLI: Piping a binary EDID file into STDIN
+ *          example: php php-edid-decode.php < data/apple-cinemahd-30-dvi
+ *   3. Web: Giving a file name as $_GET['fd']
+ *          example: http://example.com/php-edid-decode.php?fd=data/apple-cinemahd-30-dvi
+ *   4. Web: Giving a base64-encoded string as $_GET['raw64'] or $_POST['raw64']
+ *   5. Library: Call EdidDecode::main($input), $input is a path to a binary EDID file 
+ *          example:
+ *            $edidDecode = new EdidDecode();
+ *            $edidDecode->main('data/apple-cinemahd-30-dvi');
+ *   6. Library: Call EdidDecode::main($input,true), $input is a binary EDID file
+ *          example:
+ *            $edidDecode = new EdidDecode();
+ *            $edidDecode->main($binaryEDIDString,true);
+ */
+if (defined('PHP_SAPI') && PHP_SAPI=='cli') {
+	$edidDecode = new EdidDecode();
+	$edidDecode->_cli = true;
+	$edidDecode->main();
+}
+else if (isset($_GET['fd']) && is_readable($_GET['fd'])) {
+	$edidDecode = new EdidDecode();
+	$edidDecode->main($_GET['fd']);
+}
+else if (!empty($_REQUEST['raw64'])) {
+	$edidDecode = new EdidDecode();
+	$edidDecode->main(base64_decode($_REQUEST['raw64']),true);
+}
+else if (isset($_REQUEST['showform'])) {
+	$self = $_SERVER['PHP_SELF'] . '?' . $_SERVER['QUERY_STRING'];
+	echo <<<END
+<!doctype html>
+<html lang=en>
+<head>
+<meta charset=utf-8>
+<title>Online EDID Decoder</title>
+</head>
+<body>
+<form method=post action='$self'>
+	<label>Base64-encoded EDID string</label><br>
+	<textarea name=raw64 cols=80></textarea><br>
+	<input type=submit value=Decode>
+</form>
+</body>
+</html>
+END;
+}
+
 class EdidDecode {
 
-	public $_debug = true;
+	public $_debug = false;
+	public $_cli = false;
 
 	public $claims_one_point_oh = 0;
 	public $claims_one_point_two = 0;
@@ -64,15 +116,12 @@ class EdidDecode {
 	
 	public function manufacturer_name($x)
 	{
-		static $name;
+		$name = chr(((ord($x[0]) & 0x7C) >> 2) + ord('@'));
+		$name .= chr(((ord($x[0]) & 0x03) << 3) + ((ord($x[1]) & 0xE0) >> 5) + ord('@'));
+		$name .= chr((ord($x[1]) & 0x1F) + ord('@'));
 		
-		$name[0] = ((ord($x[0]) & 0x7C) >> 2) + '@';
-		$name[1] = ((ord($x[0]) & 0x03) << 3) + ((ord($x[1]) & 0xE0) >> 5) + '@';
-		$name[2] = (ord($x[1]) & 0x1F) + '@';
-		$name[3] = 0;
-		
-		if ($this->isupper($name[0]) && $this->isupper($name[1]) && $this->isupper($name[2]))
-		$this->manufacturer_name_well_formed = 1;
+		if ($this->isupper($name))
+			$this->manufacturer_name_well_formed = 1;
 		
 		return $name;
 	}
@@ -132,7 +181,7 @@ class EdidDecode {
 	/* 1 means valid data */
 	public function detailed_block($x, $in_extension)
 	{
-		#static unsigned char name[53];
+		static $name;
 		#int ha, hbl, hso, hspw, hborder, va, vbl, vso, vspw, vborder;
 		#int i;
 		#char phsync, pvsync, *$syncmethod;
@@ -188,7 +237,7 @@ class EdidDecode {
 						return 0;
 					}
 					for ($i = 0; $i < 4; $i++)
-					$valid_cvt &= $this->detailed_cvt_descriptor($x + 6 + (i * 3), ($i == 0));
+						$valid_cvt &= $this->detailed_cvt_descriptor($x + 6 + (i * 3), ($i == 0));
 					$this->has_valid_cvt &= $valid_cvt;
 					return $valid_cvt;
 				}
@@ -207,15 +256,13 @@ class EdidDecode {
 			case 0xFC:
 				/* XXX should check for spaces after the \n */
 				/* XXX check: terminated with 0x0A, padded with 0x20 */
-				/*
 				$this->has_name_descriptor = 1;
-				if (strchr($name, '\n')) return 1;
-				strncat($name, $x + 5, 13);
-				if (strchr($name, '\n')) {
+				if (strchr($name, "\n")) return 1;
+				$name = substr($x,5,13);
+				if (strchr($name, "\n")) {
 					$this->name_descriptor_terminated = 1;
 					printf("Monitor name: %s", $name);
 				}
-				*/
 				return 1;
 			case 0xFD:
 				{
@@ -360,11 +407,11 @@ class EdidDecode {
 				* seems to be specified by SPWG: http://www.spwg.org/
 				*/
 				/* XXX check: terminated with 0x0A, padded with 0x20 */
-				printf("ASCII string: %s", $x+5);
+				printf("ASCII string: %s", substr($x,5,(strpos($x,"\x0A")-(5-1))));
 				return 1;
 			case 0xFF:
 				/* XXX check: terminated with 0x0A, padded with 0x20 */
-				printf("Serial number: %s", $x+5);
+				printf("Serial number: %s", substr($x,5,(strpos($x,"\x0A")-(5-1))));
 				return 1;
 			default:
 				printf("Unknown monitor description type %d\n", ord($x[3]));
@@ -404,10 +451,10 @@ class EdidDecode {
 		$pvsync = (ord($x[17]) & (1 << 2)) ? '+' : '-';
 		$phsync = (ord($x[17]) & (1 << 1)) ? '+' : '-';
 		
-		printf("Detailed mode: Clock %.3f MHz, %d mm $x %d mm\n" .
+		printf("Detailed mode: Clock %.3f MHz, %d mm x %d mm\n" .
 		"               %4d %4d %4d %4d hborder %d\n" .
 		"               %4d %4d %4d %4d vborder %d\n" .
-		"               %chsync %cvsync%s%s\n",
+		"               %shsync %svsync%s%s\n",
 		(ord($x[0]) + (ord($x[1]) << 8)) / 100.0,
 		(ord($x[12]) + ((ord($x[14]) & 0xF0) << 4)),
 		(ord($x[13]) + ((ord($x[14]) & 0x0F) << 8)),
@@ -422,13 +469,16 @@ class EdidDecode {
 	
 	public function do_checksum($x)
 	{
-		printf("Checksum: 0x%hx", ord($x[0x7f]));
+		printf("Checksum: 0x%x", ord($x[0x7f]));
 		{
 			$sum = 0;
-			for ($i = 0; $i < 128; $i++)
-			$sum += ord($x[$i]);
+			for ($i = 0; $i < 128; $i++) {
+				$sum += ord($x[$i]);
+				if ($sum > 255) $sum -= 256; // emulate unsigned char $sum -- range is 0 to 255
+				// printf("%03d: x[i]: %04d, sum: %04d\n",$i,ord($x[$i]),$sum);
+			}
 			if ($sum) {
-				printf(" (should be 0x%hx)", (ord($x[0x7f]) - $sum));
+				printf(" (should be 0x%x)", (ord($x[0x7f]) - $sum));
 				$this->has_valid_checksum = 0;
 			}
 		}
@@ -797,13 +847,32 @@ class EdidDecode {
 		return (strtolower($i) === $i);
 	}
 	
-	public function main($fd)
+	public function main($input=null,$inputIsBinaryEDID=false)
 	{
-		echo "<pre>";
-		$edid = $this->extract_edid($fd);
-		if (empty($edid)) {
-			fprintf(stderr, "edid extract failed\n");
-			return 1;
+		if (!isset($input) && $this->_cli) {
+			// Command line -- use filename if given, STDIN otherwise
+			$input = isset($GLOBALS['argv'][1]) ? $GLOBALS['argv'][1] : 'php://stdin';
+		} else {
+			echo <<<END
+<!doctype html>
+<html lang=en>
+<head>
+<meta charset=utf-8>
+<title>EDID Decoder Output</title>
+</head>
+<body>
+<pre>
+END;
+		}
+
+		if ($inputIsBinaryEDID) {
+			$edid = $input;
+		} else {
+			$edid = $this->extract_edid($input);
+			if (empty($edid)) {
+				fprintf(stderr, "edid extract failed\n");
+				return 1;
+			}
 		}
 		
 		$this->dump_breakdown($edid);
@@ -815,9 +884,9 @@ class EdidDecode {
 		
 		printf("Manufacturer: %s Model %x Serial Number %u\n",
 		$this->manufacturer_name(substr($edid,0x08)),
-		(int)($edid[0x0A] + ($edid[0x0B] << 8)),
-		(int)($edid[0x0C] + ($edid[0x0D] << 8)
-		+ ($edid[0x0E] << 16) + ($edid[0x0F] << 24)));
+		(ord($edid[0x0A]) + (ord($edid[0x0B]) << 8)),
+		(ord($edid[0x0C]) + (ord($edid[0x0D]) << 8)
+		+ (ord($edid[0x0E]) << 16) + (ord($edid[0x0F]) << 24)));
 		/* XXX need manufacturer ID table */
 		
 		$ptm = localtime(time(),true);
@@ -835,7 +904,7 @@ class EdidDecode {
 			}
 		}
 		
-		#printf("EDID version: %d.%d\n", ord($edid[0x12]), ord($edid[0x13]));
+		printf("EDID version: %d.%d\n", ord($edid[0x12]), ord($edid[0x13]));
 		if (ord($edid[0x12]) == 1) {
 			if (ord($edid[0x13]) > 4) {
 				printf("Claims > 1.4, assuming 1.4 conformance\n");
