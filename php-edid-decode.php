@@ -23,71 +23,6 @@
 /* Author: Adam Jackson <ajax@nwnk.net> */
 /* PHP-port by: Ben Claar <ben.claar@gmail.com> */
 
-error_reporting(E_ALL | E_STRICT);
-// Turn off output buffering
-while (@ob_end_flush());	
-ob_implicit_flush();
-
-/**
- * Files can be input by (all paths absolute or relative to php-edit-decode.php):
- *   1. CLI: Specifying a filepath as the first command line argument
- *          example: php php-edid-decode.php data/apple-cinemahd-30-dvi
- *   2. CLI: Piping a binary EDID file into STDIN
- *          example: php php-edid-decode.php < data/apple-cinemahd-30-dvi
- *   3. Web: Giving a file name as $_GET['fd']
- *          example: http://example.com/php-edid-decode.php?fd=data/apple-cinemahd-30-dvi
- *   4. Web: Giving a base64-encoded string as $_GET['raw64'] or $_POST['raw64']
- *   5. Web: Giving a regedit-exported string as $_GET['regexport'] or $_POST['regexport']
- *          note: EDIDs are located at locations like
- *             HKLM\SYSTEM\CurrentControlSet\Enum\DISPLAY\*\*\Device Parameters
- *   6. Library: Call EdidDecode::main($input), $input is a path to a binary EDID file 
- *          example:
- *            $edidDecode = new EdidDecode();
- *            $edidDecode->main('data/apple-cinemahd-30-dvi');
- *   7. Library: Call EdidDecode::main($input,true), $input is a binary EDID file
- *          example:
- *            $edidDecode = new EdidDecode();
- *            $edidDecode->main($binaryEDIDString,true);
- */
-if (defined('PHP_SAPI') && PHP_SAPI=='cli') {
-	$edidDecode = new EdidDecode();
-	$edidDecode->_cli = true;
-	$edidDecode->main();
-}
-else if (isset($_GET['fd']) && is_readable($_GET['fd'])) {
-	$edidDecode = new EdidDecode();
-	$edidDecode->main($_GET['fd']);
-}
-else if (!empty($_REQUEST['raw'])) {
-	$edidDecode = new EdidDecode();
-	
-	if (strpos($_REQUEST['raw'],'"EDID"=hex:') !== false) {
-		$input = EdidDecode::regedit_decode($_REQUEST['raw']);
-	} else {
-		$input = base64_decode($_REQUEST['raw']);
-	}
-	$edidDecode->main($input,true);
-}
-else if (isset($_REQUEST['showform'])) {
-	$self = $_SERVER['PHP_SELF'] . '?' . $_SERVER['QUERY_STRING'];
-	echo <<<END
-<!doctype html>
-<html lang=en>
-<head>
-<meta charset=utf-8>
-<title>Online EDID Decoder</title>
-</head>
-<body>
-<form method=post action='$self'>
-	<label>Base64-encoded EDID string</label><br>
-	<textarea name=raw cols=80></textarea><br>
-	<input type=submit value=Decode>
-</form>
-</body>
-</html>
-END;
-}
-
 class EdidDecode {
 
 	public $_debug = false;
@@ -861,24 +796,8 @@ class EdidDecode {
 		return (strtolower($i) === $i);
 	}
 	
-	public function main($input=null,$inputIsBinaryEDID=false)
+	public function main($input,$inputIsBinaryEDID=false)
 	{
-		if (!isset($input) && $this->_cli) {
-			// Command line -- use filename if given, STDIN otherwise
-			$input = isset($GLOBALS['argv'][1]) ? $GLOBALS['argv'][1] : 'php://stdin';
-		} else {
-			echo <<<END
-<!doctype html>
-<html lang=en>
-<head>
-<meta charset=utf-8>
-<title>EDID Decoder Output</title>
-</head>
-<body>
-<pre>
-END;
-		}
-
 		if ($inputIsBinaryEDID) {
 			$edid = $input;
 		} else {
