@@ -268,6 +268,9 @@ class EdidDecode {
 				$this->has_name_descriptor = 1;
 				if (strchr($name, "\n")) return 1;
 				$name = substr($x,5,13);
+				if (strpos($name,"\x0")!==false) {
+					$name = substr($name,0,strpos($name,"\x0"));
+				}
 				if (strchr($name, "\n")) {
 					$this->name_descriptor_terminated = 1;
 					printf("Monitor name: %s", $name);
@@ -420,7 +423,7 @@ class EdidDecode {
 				return 1;
 			case 0xFF:
 				/* XXX check: terminated with 0x0A, padded with 0x20 */
-				printf("Serial number: %s", substr($x,5,(strpos($x,"\x0A")-(5-1))));
+				//printf("Serial number: %s", substr($x,5,(strpos($x,"\x0A")-(5-1))));
 				return 1;
 			default:
 				printf("Unknown monitor description type %d\n", ord($x[3]));
@@ -428,7 +431,7 @@ class EdidDecode {
 			}
 		}
 		
-		if ($this->seen_non_detailed_descriptor && !in_extension) {
+		if ($this->seen_non_detailed_descriptor && !$in_extension) {
 			$this->has_valid_descriptor_ordering = 0;
 		}
 		
@@ -549,7 +552,7 @@ class EdidDecode {
 		case 0x03:
 			/* yes really, endianness lols */
 			$oui = (ord($x[3]) << 16) + (ord($x[2]) << 8) + ord($x[1]);
-			printf("  Vendor-specific data block, OUI %06x", oui);
+			printf("  Vendor-specific data block, OUI %06x", $oui);
 			if ($oui == 0x000c03)
 			$this->cea_hdmi_block($x);
 			else
@@ -631,25 +634,26 @@ class EdidDecode {
 			} else if ($version == 3) {
 				printf("%d bytes of CEA data\n", $offset - 4);
 				for ($i = 4; $i < $offset; $i += (ord($x[$i]) & 0x1f) + 1) {
-					$this->cea_block($x + i);
+					$this->cea_block(substr($x,$i));
 				}
 			}
 			
 			if ($version >= 2) {    
 				if (ord($x[3]) & 0x80)
-				printf("Underscans PC formats by default\n");
+					printf("Underscans PC formats by default\n");
 				if (ord($x[3]) & 0x40)
-				printf("Basic audio support\n");
+					printf("Basic audio support\n");
 				if (ord($x[3]) & 0x20)
-				printf("Supports YCbCr 4:4:4\n");
+					printf("Supports YCbCr 4:4:4\n");
 				if (ord($x[3]) & 0x10)
-				printf("Supports YCbCr 4:2:2\n");
-				printf("%d native detailed modes\n", ord($x[3]) & 0x0f);
+					printf("Supports YCbCr 4:2:2\n");
+					printf("%d native detailed modes\n", ord($x[3]) & 0x0f);
 			}
 			
-			for ($detailed = $x + $offset; $detailed + 18 < $x + 127; $detailed += 18)
-			if ($detailed[0])
-			$this->detailed_block($detailed, 1);
+			for ($i = $offset; $i + 18 < 127; $i += 18)
+				if (ord($x[$i]))
+					$this->detailed_block(substr($x,$i), 1);
+			
 		} while (0);
 		
 		$this->do_checksum($x);
@@ -666,6 +670,7 @@ class EdidDecode {
 	
 	public function parse_extension($x)
 	{
+		$conformant_extension = 0;
 		printf("\n");
 		
 		switch(ord($x[0])) {
@@ -969,11 +974,11 @@ END;
 			$analog = 1;
 			$voltage = (ord($edid[0x14]) & 0x60) >> 5;
 			$sync = (ord($edid[0x14]) & 0x0F);
-			printf("analog display, Input voltage level: %s V\n",
-			$voltage == 3 ? "0.7/0.7" :
-			$voltage == 2 ? "1.0/0.4" :
-			$voltage == 1 ? "0.714/0.286" :
-			"0.7/0.3");
+			printf("Analog display, Input voltage level: %s V\n",
+				($voltage == 3 ? "0.7/0.7" :
+				($voltage == 2 ? "1.0/0.4" :
+				($voltage == 1 ? "0.714/0.286" :
+				"0.7/0.3"))));
 			
 			if ($this->claims_one_point_four) {
 				if (ord($edid[0x14]) & 0x10)
@@ -1111,10 +1116,9 @@ END;
 		
 		$this->do_checksum($edid);
 		
-		$x = ord($edid);
-		for ($this->edid_lines /= 8; $this->edid_lines > 1; $this->edid_lines--) {
-			$x += 128;
-			$this->nonconformant_digital_display += $this->parse_extension($x);
+		$len = strlen($edid);
+		for ($i = 128;$i < $len;$i += 128) {
+			$this->nonconformant_digital_display += $this->parse_extension(substr($edid,$i));
 		}
 		
 		if ($this->claims_one_point_three) {
@@ -1124,40 +1128,40 @@ END;
 					!$this->name_descriptor_terminated ||
 					!$this->has_preferred_timing ||
 					!$this->has_range_descriptor)
-			$this->conformant = 0;
+				$this->conformant = 0;
 			if (!$this->conformant)
-			printf("EDID block does NOT conform to EDID 1.3!\n");
+				printf("EDID block does NOT conform to EDID 1.3!\n");
 			if ($this->nonconformant_digital_display)
-			printf("\tDigital display field contains garbage: %x\n",
-			$this->nonconformant_digital_display);
+				printf("\tDigital display field contains garbage: %x\n",
+					$this->nonconformant_digital_display);
 			if (!$this->has_name_descriptor)
-			printf("\tMissing name descriptor\n");
+				printf("\tMissing name descriptor\n");
 			else if (!$this->name_descriptor_terminated)
-			printf("\tName descriptor not terminated with a newline\n");
+				printf("\tName descriptor not terminated with a newline\n");
 			if (!$this->has_preferred_timing)
-			printf("\tMissing preferred timing\n");
+				printf("\tMissing preferred timing\n");
 			if (!$this->has_range_descriptor)
-			printf("\tMissing monitor ranges\n");
+				printf("\tMissing monitor ranges\n");
 			if (!$this->has_valid_descriptor_pad) /* Might be more than just 1.3 */
-			printf("\tInvalid descriptor block padding\n");
+				printf("\tInvalid descriptor block padding\n");
 		} else if ($this->claims_one_point_two) {
 			if ($this->nonconformant_digital_display ||
 					($this->has_name_descriptor && !$this->name_descriptor_terminated))
-			$this->conformant = 0;
+				$this->conformant = 0;
 			if (!$this->conformant)
-			printf("EDID block does NOT conform to EDID 1.2!\n");
+				printf("EDID block does NOT conform to EDID 1.2!\n");
 			if ($this->nonconformant_digital_display)
-			printf("\tDigital display field contains garbage: %x\n",
-			$this->nonconformant_digital_display);
+				printf("\tDigital display field contains garbage: %x\n",
+					$this->nonconformant_digital_display);
 			if ($this->has_name_descriptor && !$this->name_descriptor_terminated)
-			printf("\tName descriptor not terminated with a newline\n");
+				printf("\tName descriptor not terminated with a newline\n");
 		} else if ($this->claims_one_point_oh) {
 			if ($this->seen_non_detailed_descriptor)
-			$this->conformant = 0;
+				$this->conformant = 0;
 			if (!$this->conformant)
-			printf("EDID block does NOT conform to EDID 1.0!\n");
+				printf("EDID block does NOT conform to EDID 1.0!\n");
 			if ($this->seen_non_detailed_descriptor)
-			printf("\tHas descriptor blocks other than detailed timings\n");
+				printf("\tHas descriptor blocks other than detailed timings\n");
 		}
 		
 		if ($this->nonconformant_extension ||
@@ -1174,35 +1178,35 @@ END;
 			$this->conformant = 0;
 			printf("EDID block does not conform at all!\n");
 			if ($this->nonconformant_extension)
-			printf("\tHas at least one nonconformant extension block\n");
+				printf("\tHas at least one nonconformant extension block\n");
 			if (!$this->has_valid_checksum)
-			printf("\tBlock has broken checksum\n");
+				printf("\tBlock has broken checksum\n");
 			if (!$this->has_valid_cvt)
-			printf("\tBroken 3-byte CVT blocks\n");
+				printf("\tBroken 3-byte CVT blocks\n");
 			if (!$this->has_valid_year)
-			printf("\tBad year of manufacture\n");
+				printf("\tBad year of manufacture\n");
 			if (!$this->has_valid_week)
-			printf("\tBad week of manufacture\n");
+				printf("\tBad week of manufacture\n");
 			if (!$this->has_valid_detailed_blocks)
-			printf("\tDetailed blocks filled with garbage\n");
+				printf("\tDetailed blocks filled with garbage\n");
 			if (!$this->has_valid_dummy_block)
-			printf("\tDummy block filled with garbage\n");
+				printf("\tDummy block filled with garbage\n");
 			if (!$this->has_valid_extension_count)
-			printf("\tImpossible extension block count\n");
+				printf("\tImpossible extension block count\n");
 			if (!$this->manufacturer_name_well_formed)
-			printf("\tManufacturer name field contains garbage\n");
+				printf("\tManufacturer name field contains garbage\n");
 			if (!$this->has_valid_descriptor_ordering)
-			printf("\tInvalid detailed timing descriptor ordering\n");
+				printf("\tInvalid detailed timing descriptor ordering\n");
 			if (!$this->has_valid_range_descriptor)
-			printf("\tRange descriptor contains garbage\n");
+				printf("\tRange descriptor contains garbage\n");
 			if (!$this->has_valid_max_dotclock)
-			printf("\tEDID 1.4 block does not set max dotclock\n");
+				printf("\tEDID 1.4 block does not set max dotclock\n");
 		}
 		
 		if ($this->warning_excessive_dotclock_correction)
-		printf("Warning: CVT block corrects dotclock by more than 9.75MHz\n");
+			printf("Warning: CVT block corrects dotclock by more than 9.75MHz\n");
 		if ($this->warning_zero_preferred_refresh)
-		printf("Warning: CVT block does not set preferred refresh rate\n");
+			printf("Warning: CVT block does not set preferred refresh rate\n");
 		
 		return !$this->conformant;
 	}
