@@ -82,8 +82,10 @@ $self = $_SERVER['PHP_SELF'] . '?' . $_SERVER['QUERY_STRING'];
 <pre>
 <?php
 if (isset($input)) {
-	echo "<h2>Output</h2>";
+	echo "<h2>Standard Output</h2>";
 	$edidDecode->main($input,$inputIsBinary);
+	echo "<h2>PHP result Array</h2>";
+	var_export($edidDecode->result);
 }
 ?>
 </pre>
