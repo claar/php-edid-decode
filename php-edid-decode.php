@@ -387,8 +387,6 @@ class EdidDecode {
 		}
 		
 		$this->did_detailed_timing = 1;
-		$result['detailed-timings'][$index] = array();
-		$thisTiming = &$result['detailed-timings'][$index];
 		$ha = (ord($x[2]) + ((ord($x[4]) & 0xF0) << 4)); // Horizontal Addressable Video
 		$hbl = (ord($x[3]) + ((ord($x[4]) & 0x0F) << 8)); // Hor blanking
 		$hso = (ord($x[8]) + ((ord($x[11]) & 0xC0) << 2)); // Hor front porch
@@ -415,11 +413,16 @@ class EdidDecode {
 		}
 		$pvsync = (ord($x[17]) & (1 << 2)) ? '+' : '-';
 		$phsync = (ord($x[17]) & (1 << 1)) ? '+' : '-';
-		
+
+		$refresh = (ord($x[0]) + (ord($x[1]) << 8)) / 100.0;
+		$timing = $this->result_add_timing($ha,$va,$refresh,$index===0);
+
+		$result['detailed-timings'][$timing] = array();
+		$thisTiming = &$result['detailed-timings'][$timing];
 		$thisTiming['sync_method'] = $syncmethod;
 		$thisTiming['x'] = $ha;
 		$thisTiming['y'] = $va;
-		$thisTiming['refresh'] = (ord($x[0]) + (ord($x[1]) << 8)) / 100.0;
+		$thisTiming['refresh'] = $refresh;
 		$thisTiming['image-size'] = (ord($x[12]) + ((ord($x[14]) & 0xF0) << 4)) . " mm x " .
 			(ord($x[13]) + ((ord($x[14]) & 0x0F) << 8)) . " mm";
 		$this->myprintf("Detailed mode: Clock %.3f MHz, %s\n" .
@@ -1199,7 +1202,7 @@ class EdidDecode {
 		return (strtolower($i) === $i);
 	}
 	
-	public function result_add_timing($x,$y,$refresh)
+	public function result_add_timing($x,$y,$refresh,$preferred=false)
 	{
 		$str = "${x}x${y}@${refresh}Hz";
 		$this->result['timings'][$str] = array(
@@ -1207,6 +1210,9 @@ class EdidDecode {
 			'y' => $y,
 			'refresh' => $refresh,
 		);
+		if ($preferred) {
+			$this->result['preferred-timing'] = $this->result['timings'][$str];
+		}
 		return $str;
 	}
 	
