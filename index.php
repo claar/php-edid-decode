@@ -28,8 +28,6 @@ require_once('php-edid-decode.php');
 while (@ob_end_flush());	
 ob_implicit_flush();
 
-$self = $_SERVER['PHP_SELF'] . '?' . $_SERVER['QUERY_STRING'];
-
 $inputIsBinary = false;
 $edidDecode = new EdidDecode();
 $edidDecode->_cli = false;
@@ -37,7 +35,9 @@ $input = null;
 
 if (defined('PHP_SAPI') && PHP_SAPI=='cli') {
 	$edidDecode->_cli = true;
-	$input = 'php://stdin';
+	$input = isset($GLOBALS['argv'][1]) ? $GLOBALS['argv'][1] : 'php://stdin';
+	$edidDecode->main($input);
+	exit();
 }
 else if (isset($_REQUEST['fd']) && is_readable($_REQUEST['fd'])) {
 	$input = $_REQUEST['fd'];
@@ -77,20 +77,14 @@ if (!empty($samples)) {
         <textarea name=raw cols=80></textarea><br>
         <input type=submit value=Decode>
 </form>
-
+<pre>
 <?php
 if (isset($input)) {
-	if (!$edidDecode->_cli) {
-		echo "<pre>";
-	}
-
+	echo "<h2>Output</h2>\n";
 	$edidDecode->main($input,$inputIsBinary);
-
-	if (!$edidDecode->_cli) {
-		echo "</pre>";
-	}
 }
 ?>
+</pre>
 </body>
 </html>
 <?php

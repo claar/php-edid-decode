@@ -72,7 +72,7 @@ class EdidDecode {
 	
 	public function detailed_cvt_descriptor($x, $first)
 	{
-		$empty = array( 0, 0, 0 );
+		$empty = "\x00\x00\x00";
 		$names = array( "50", "60", "75", "85" );
 		$valid = 1;
 		$fifty = 0; $sixty = 0; $seventyfive = 0; $eightyfive = 0; $reduced = 0;
@@ -752,9 +752,9 @@ class EdidDecode {
 		
 		printf("%s:", $name);
 		for ($i = strlen($name); $i < 15; $i++)
-		printf(" ");
+			printf(" ");
 		for ($i = $start; $i <= $end; $i++)
-		printf(" %02x", ord($edid[$i]));
+			printf(" %02x", ord($edid[$i]));
 		printf("\n");
 	}
 	
@@ -777,25 +777,6 @@ class EdidDecode {
 		printf("\n");
 	}
 	
-	public function memcmp($a,$b,$len)
-	{
-		for ($i = 0; $i < $len; ++$i) {
-			if (!isset($a[$i]) || !isset($b[$i]) || $a[$i] !== $b[$i]) {
-				return false;
-			}
-		}
-		return true;
-	}
-	
-	public function isupper($i)
-	{
-		return (strtoupper($i) === $i);
-	}
-	
-	public function islower($i) {
-		return (strtolower($i) === $i);
-	}
-	
 	public function main($input,$inputIsBinaryEDID=false)
 	{
 		if ($inputIsBinaryEDID) {
@@ -803,7 +784,9 @@ class EdidDecode {
 		} else {
 			$edid = $this->extract_edid($input);
 			if (empty($edid)) {
-				fprintf(stderr, "edid extract failed\n");
+				$fh = fopen('php://stderr','w');
+				fwrite($fh,"edid extract failed\n");
+				fclose($fh);
 				return 1;
 			}
 		}
@@ -1130,6 +1113,25 @@ class EdidDecode {
 		return !$this->conformant;
 	}
 
+	public function memcmp($a,$b,$len)
+	{
+		for ($i = 0; $i < $len; ++$i) {
+			if (!isset($a[$i]) || !isset($b[$i]) || $a[$i] !== $b[$i]) {
+				return false;
+			}
+		}
+		return true;
+	}
+	
+	public function isupper($i)
+	{
+		return (strtoupper($i) === $i);
+	}
+	
+	public function islower($i) {
+		return (strtolower($i) === $i);
+	}
+	
 	/*
 	 * Parses EDIDs as exported by regedit -- 
 	 * [HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Enum\DISPLAY\DELD028\5&27bbed36&0&UID16777489\Device Parameters]
@@ -1140,7 +1142,8 @@ class EdidDecode {
 	 *   4c,4c,20,50,32,33,31,30,48,0a,20,00,00,00,fd,00,38,4c,1e,53,11,00,0a,20,20,\
 	 *   20,20,20,20,00,b2
 	 */	
-	static public function regedit_decode($string) {
+	static public function regedit_decode($string)
+	{
 		$ret = '';
 
 		$string = substr($string,strpos($_REQUEST['raw'],'"EDID"=hex:')+11);
