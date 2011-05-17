@@ -63,6 +63,8 @@ foreach ($samples as $name => $fd) {
 if (!empty($samples)) {
 	$samplesHTML = "<select name='fd' onchange='submit()'>\n<option>Select..</option>\n" . $samplesHTML . "</select><br>";
 }
+
+$self = $_SERVER['PHP_SELF'] . '?' . $_SERVER['QUERY_STRING'];
 ?>
 <!doctype html>
 <html lang=en>
@@ -80,7 +82,7 @@ if (!empty($samples)) {
 <pre>
 <?php
 if (isset($input)) {
-	echo "<h2>Output</h2>\n";
+	echo "<h2>Output</h2>";
 	$edidDecode->main($input,$inputIsBinary);
 }
 ?>
