@@ -11,7 +11,7 @@
  *   5. Web: Giving a regedit-exported string as $_GET['regexport'] or $_POST['regexport']
  *          note: In the Microsoft Windows registry, EDIDs are located at locations like:
  *             HKLM\SYSTEM\CurrentControlSet\Enum\DISPLAY\*\*\Device Parameters
- *   6. Library: Call EdidDecode::main($input), $input is a path to a binary EDID file 
+ *   6. Library: Call EdidDecode::main($input), $input is a path to a binary EDID file
  *          example:
  *            $edidDecode = new EdidDecode();
  *            $edidDecode->main('data/apple-cinemahd-30-dvi');
@@ -25,7 +25,7 @@ error_reporting(E_ALL | E_STRICT);
 require_once('php-edid-decode.php');
 
 // Turn off output buffering
-while (@ob_end_flush());	
+while (@ob_end_flush());
 ob_implicit_flush();
 
 $inputIsBinary = false;
@@ -36,14 +36,15 @@ $input = null;
 if (defined('PHP_SAPI') && PHP_SAPI=='cli') {
 	$edidDecode->_cli = true;
 	$input = isset($GLOBALS['argv'][1]) ? $GLOBALS['argv'][1] : 'php://stdin';
-	$edidDecode->main($input);
-	exit();
+	$conformant = $edidDecode->main($input);
+	exit((int)$conformant);
+
 }
 else if (isset($_REQUEST['fd']) && is_readable($_REQUEST['fd'])) {
 	$input = $_REQUEST['fd'];
 }
 else if (!empty($_REQUEST['raw'])) {
-	
+
 	if (strpos($_REQUEST['raw'],'"EDID"=hex:') !== false) {
 		$input = EdidDecode::regedit_decode($_REQUEST['raw']);
 	} else {
@@ -99,14 +100,14 @@ function get_edid_sample_files() {
 	$ret = array();
 	$path = 'data';
 	if ($dir_handle = @opendir($path)) {
-	
+
 		while (false !== ($file = readdir($dir_handle))) {
 			if ($file == '.' || $file == '..') continue;
 			$ret[$file] = "$path/$file";
 		}
 		closedir($dir_handle);
 	}
-	
+
 	return $ret;
 }
-?>
+

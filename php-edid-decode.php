@@ -25,14 +25,10 @@
 
 class EdidDecode {
 
-	public $_debug = false;
-	public $_cli = false;
-	public $_output = true;
-
-	/**
-	 * The decoded EDID
-	 */
-	public $result = array();
+	public $_debug = false; // Whether to output additional debug information
+	public $_output = true; // Whether to output anything
+	public $result_str = ''; // A saved copy of the output
+	public $result = array(); // The decoded EDID
 
 	public $claims_one_point_oh = 0;
 	public $claims_one_point_two = 0;
@@ -1230,9 +1226,11 @@ class EdidDecode {
 
 	public function myprintf()
 	{
+		$this->result_str = call_user_func_array('sprintf',func_get_args());
 		if ($this->_output) {
-			return call_user_func_array('printf',func_get_args());
+			echo $this->result_str;
+			return strlen($this->result_str);
 		}
-		return false;
+		return 0;
 	}
 }
