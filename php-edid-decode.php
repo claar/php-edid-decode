@@ -30,6 +30,10 @@ class EdidDecode {
 	public $result_str = ''; // A saved copy of the output
 	public $result = array(); // The decoded EDID
 
+	private $_detailed_block_index = 0;
+	private $_detailed_block_name; // Replaces the static vars in c version -- we need
+	private $_result_add_timing_detailed_index = 0;   //  this variable to be "static" per class instance
+
 	public $claims_one_point_oh = 0;
 	public $claims_one_point_two = 0;
 	public $claims_one_point_three = 0;
@@ -128,11 +132,8 @@ class EdidDecode {
 	public function detailed_block($x, $in_extension)
 	{
 		$result = &$this->result; // Convenience var
-		static $name;
-		static $index = 0;
-		#int ha, hbl, hso, hspw, hborder, va, vbl, vso, vspw, vborder;
-		#int i;
-		#char phsync, pvsync, *$syncmethod;
+		$name = &$this->detailed_block_name; // Convenience var
+		$index = &$this->detailed_block_index; // Convenience var
 
 		if ($this->_debug) {
 			$this->myprintf("Hex of detail: ");
@@ -210,6 +211,7 @@ class EdidDecode {
 				if (strpos($name,"\x0")!==false) {
 					$name = substr($name,0,strpos($name,"\x0"));
 				}
+				$this->result['name'] = rtrim($name);
 				if (strchr($name, "\n")) {
 					$this->name_descriptor_terminated = 1;
 					$this->myprintf("Monitor name: %s", $name);
@@ -370,7 +372,8 @@ class EdidDecode {
 				return 1;
 			case 0xFF:
 				/* XXX check: terminated with 0x0A, padded with 0x20 */
-				//printf("Serial number: %s", substr($x,5,(strpos($x,"\x0A")-(5-1))));
+				$result['serial_number'] = rtrim(substr($x,5,(strpos($x,"\x0A")-(5-1))));
+				//printf("Serial number: %s", $result['serial_number']);
 				return 1;
 			default:
 				$this->myprintf("Unknown monitor description type %d\n", ord($x[3]));
@@ -411,7 +414,7 @@ class EdidDecode {
 		$phsync = (ord($x[17]) & (1 << 1)) ? '+' : '-';
 
 		$refresh = (ord($x[0]) + (ord($x[1]) << 8)) / 100.0;
-		$timing = $this->result_add_timing($ha,$va,$refresh,$index===0);
+		$timing = $this->result_add_timing($ha,$va,$refresh,true);
 
 		$result['detailed-timings'][$timing] = array();
 		$thisTiming = &$result['detailed-timings'][$timing];
@@ -824,10 +827,10 @@ class EdidDecode {
 		}
 		$result['manufacturer_name'] = $this->manufacturer_name(substr($edid,0x08));
 		$result['product_code']      = (ord($edid[0x0A]) + (ord($edid[0x0B]) << 8));
-		$result['serial_number']     = (ord($edid[0x0C]) + (ord($edid[0x0D]) << 8) +
+		$result['serial_number_int'] = (ord($edid[0x0C]) + (ord($edid[0x0D]) << 8) +
 			                           (ord($edid[0x0E]) << 16) + (ord($edid[0x0F]) << 24));
 		$this->myprintf("Manufacturer: %s Model %x Serial Number %u\n",
-			$result['manufacturer_name'], $result['product_code'], $result['serial_number']);
+			$result['manufacturer_name'], $result['product_code'], $result['serial_number_int']);
 		/* XXX need manufacturer ID table */
 
 		$ptm = localtime(time(),true);
@@ -838,12 +841,14 @@ class EdidDecode {
 					$this->has_valid_year = 1;
 					$result['manufacture_week'] = ord($edid[0x10]);
 					$result['manufacture_year'] = ord($edid[0x11]);
+					$result['manufacture_date'] = mktime(0,0,0,1, ord($edid[0x10])*7,ord($edid[0x11]));
 					$this->myprintf("Made week %d of model year %d\n",
 						$result['manufacture_week'], $result['manufacture_year']);
 				} else if (ord($edid[0x11]) + 90 <= $ptm['tm_year']) {
 					$this->has_valid_year = 1;
 					$result['manufacture_week'] = ord($edid[0x10]);
 					$result['manufacture_year'] = ord($edid[0x11]) + 1990;
+					$result['manufacture_date'] = mktime(0,0,0,1, ord($edid[0x10])*7,ord($edid[0x11]) + 1990);
 					$this->myprintf("Made week %d of %d\n",
 						$result['manufacture_week'], $result['manufacture_year']);
 				}
@@ -1186,16 +1191,22 @@ class EdidDecode {
 		return (strtolower($i) === $i);
 	}
 
-	public function result_add_timing($x,$y,$refresh,$preferred=false)
+	public function result_add_timing($x,$y,$refresh,$detailed=false)
 	{
+		$detailed_index = &$_result_add_timing_detailed_index;
+
 		$str = "${x}x${y}@${refresh}Hz";
 		$this->result['timings'][$str] = array(
 			'x' => $x,
 			'y' => $y,
 			'refresh' => $refresh,
 		);
-		if ($preferred) {
-			$this->result['preferred-timing'] = $this->result['timings'][$str];
+
+		if ($detailed) {
+			if ($detailed_index == 0) {
+				$this->result['preferred-timing'] = $this->result['timings'][$str];
+			}
+			$detailed_index++;
 		}
 		return $str;
 	}
@@ -1226,7 +1237,7 @@ class EdidDecode {
 
 	public function myprintf()
 	{
-		$this->result_str = call_user_func_array('sprintf',func_get_args());
+		$this->result_str .= call_user_func_array('sprintf',func_get_args());
 		if ($this->_output) {
 			echo $this->result_str;
 			return strlen($this->result_str);
