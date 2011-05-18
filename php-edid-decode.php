@@ -58,39 +58,39 @@ class EdidDecode {
 	public $has_valid_max_dotclock = 1;
 	public $manufacturer_name_well_formed = 0;
 	public $seen_non_detailed_descriptor = 0;
-	
+
 	public $warning_excessive_dotclock_correction = 0;
 	public $warning_zero_preferred_refresh = 0;
-	
+
 	public $conformant = 1;
-	
+
 	public function manufacturer_name($x)
 	{
 		$name = chr(((ord($x[0]) & 0x7C) >> 2) + ord('@'));
 		$name .= chr(((ord($x[0]) & 0x03) << 3) + ((ord($x[1]) & 0xE0) >> 5) + ord('@'));
 		$name .= chr((ord($x[1]) & 0x1F) + ord('@'));
-		
+
 		if ($this->isupper($name))
 			$this->manufacturer_name_well_formed = 1;
-		
+
 		return $name;
 	}
-	
+
 	public function detailed_cvt_descriptor($x, $first)
 	{
 		$empty = "\x00\x00\x00";
 		$names = array( "50", "60", "75", "85" );
 		$valid = 1;
 		$fifty = 0; $sixty = 0; $seventyfive = 0; $eightyfive = 0; $reduced = 0;
-		
+
 		if (!$first && !$this->memcmp($x, $empty, 3))
 		return $valid;
-		
+
 		$height = ord($x[0]);
 		$height |= (ord($x[1]) & 0xf0) << 4;
 		$height++;
 		$height *= 2;
-		
+
 		switch (ord($x[1]) & 0x0c) {
 		case 0x00:
 			$width = ($height * 4) / 3; break;
@@ -101,17 +101,17 @@ class EdidDecode {
 		case 0x0c:
 			$width = ($height * 15) / 9; break;
 		}
-		
+
 		if (ord($x[1]) & 0x03)    $valid = 0;
 		if (ord($x[2]) & 0x80)    $valid = 0;
 		if (!(ord($x[2]) & 0x1f)) $valid = 0;
-		
+
 		$fifty       = (ord($x[2]) & 0x10);
 		$sixty       = (ord($x[2]) & 0x08);
 		$seventyfive = (ord($x[2]) & 0x04);
 		$eightyfive  = (ord($x[2]) & 0x02);
 		$reduced     = (ord($x[2]) & 0x01);
-		
+
 		if (!$valid) {
 			$this->myprintf("    (broken)\n");
 		} else {
@@ -124,10 +124,10 @@ class EdidDecode {
 			$names[(ord($x[2]) & 0x60) >> 5],
 			(((ord($x[2]) & 0x60) == 0x20) && $reduced) ? "RB" : "");
 		}
-		
+
 		return $valid;
 	}
-	
+
 	/* 1 means valid data */
 	public function detailed_block($x, $in_extension)
 	{
@@ -137,13 +137,13 @@ class EdidDecode {
 		#int ha, hbl, hso, hspw, hborder, va, vbl, vso, vspw, vborder;
 		#int i;
 		#char phsync, pvsync, *$syncmethod;
-		
+
 		if ($this->_debug) {
 			$this->myprintf("Hex of detail: ");
 			for ($i = 0; $i < 18; $i++) $this->myprintf("%02x", ord($x[$i]));
 			$this->myprintf("\n");
 		}
-		
+
 		if (ord($x[0]) == 0 && ord($x[1]) == 0) {
 			/* Monitor descriptor block, not detailed timing descriptor. */
 			if (ord($x[2]) != 0) {
@@ -158,7 +158,7 @@ class EdidDecode {
 				ord($x[4]));
 				$this->has_valid_descriptor_pad = 0;
 			}
-			
+
 			$this->seen_non_detailed_descriptor = 1;
 			if (ord($x[3]) <= 0xF) {
 				/*
@@ -227,7 +227,7 @@ class EdidDecode {
 					$v_min_offset = 0;
 					$is_cvt = 0;
 					$this->has_range_descriptor = 1;
-					/* 
+					/*
 			* XXX todo: implement feature flags, vtd blocks
 			* XXX check: ranges are well-formed; block termination if no vtd
 			*/
@@ -247,7 +247,7 @@ class EdidDecode {
 					} else if (ord($x[4])) {
 						$this->has_valid_range_descriptor = 0;
 					}
-					
+
 					/*
 			* despite the values, this is not a bitfield.
 			* XXX only 0x00 and 0x02 are legal for pre-1.4
@@ -265,12 +265,12 @@ class EdidDecode {
 						default: /* invalid */
 							break;
 					}
-					
+
 					if (ord($x[5]) + $v_min_offset > ord($x[6]) + $v_max_offset)
 						$this->has_valid_range_descriptor = 0;
 					if (ord($x[7]) + $h_min_offset > ord($x[8]) + $h_max_offset)
 						$this->has_valid_range_descriptor = 0;
-					
+
 					$result['vertical-range'] = (ord($x[5]) + $v_min_offset) . '-' . (ord($x[6]) + $v_max_offset) . 'HZ';
 					$result['horizontal-range'] = (ord($x[7]) + $h_min_offset) . '-' . (ord($x[8]) + $h_max_offset) . 'kHz';
 					$this->myprintf("Monitor ranges: %s vertical, %s horizontal",
@@ -284,12 +284,12 @@ class EdidDecode {
 							$this->has_valid_max_dotclock = 0;
 						$this->myprintf("\n");
 					}
-					
+
 					if ($is_cvt) {
 						$max_h_pixels = 0;
-						
+
 						$this->myprintf("CVT version %d.%d\n", ord($x[11]) & 0xf0 >> 4, ord($x[11]) & 0x0f);
-						
+
 						if (ord($x[12]) & 0xfc) {
 							$raw_offset = (ord($x[12]) & 0xfc) >> 2;
 							$result['max-dotclock'] = (ord($x[9]) * 10) - ($raw_offset * 0.25);
@@ -299,7 +299,7 @@ class EdidDecode {
 							if ($raw_offset >= 40)
 								$this->warning_excessive_dotclock_correction = 1;
 						}
-						
+
 						$max_h_pixels = ord($x[12]) & 0x03;
 						$max_h_pixels <<= 8;
 						$max_h_pixels |= ord($x[13]);
@@ -308,7 +308,7 @@ class EdidDecode {
 							$result['max-h-pixels'] = $max_h_pixels;
 							$this->myprintf("Max active pixels per line: %d\n", $max_h_pixels);
 						}
-						
+
 						$result['supported-aspect-ratios'] = trim(
 							(ord($x[14]) & 0x80 ? " 4:3"  : "") .
 							(ord($x[14]) & 0x40 ? " 16:9" : "") .
@@ -318,7 +318,7 @@ class EdidDecode {
 						$this->myprintf("Supported aspect ratios: %s\n", $result['supported-aspect-ratios']);
 						if (ord($x[14]) & 0x07)
 							$this->has_valid_range_descriptor = 0;
-						
+
 						switch((ord($x[15]) & 0xe0) >> 5) {
 							case 0x00: $result['preferred-aspect-ratio'] = "4:3"; break;
 							case 0x01: $result['preferred-aspect-ratio'] = "16:9"; break;
@@ -328,15 +328,15 @@ class EdidDecode {
 							default: $result['preferred-aspect-ratio'] = "(broken)"; break;
 						}
 						$this->myprintf("Preferred aspect ratio: %s\n", $result['preferred-aspect-ratio']);
-						
+
 						if (ord($x[15]) & 0x04)
 							$this->myprintf("Supports CVT standard blanking\n");
 						if (ord($x[15]) & 0x10)
 							$this->myprintf("Supports CVT reduced blanking\n");
-						
+
 						if (ord($x[15]) & 0x07)
 						$this->has_valid_range_descriptor = 0;
-						
+
 						if (ord($x[16]) & 0xf0) {
 							$this->myprintf("Supported display scaling:\n");
 							if (ord($x[16]) & 0x80)
@@ -348,16 +348,16 @@ class EdidDecode {
 							if (ord($x[16]) & 0x10)
 								$this->myprintf("    Vertical stretch\n");
 						}
-						
+
 						if (ord($x[16]) & 0x0f)
 							$this->has_valid_range_descriptor = 0;
-						
+
 						if (ord($x[17]))
 							$this->myprintf("Preferred vertical refresh: %d Hz\n", ord($x[17]));
 						else
 							$this->warning_zero_preferred_refresh = 1;
 					}
-					
+
 					/*
 			* Slightly weird to return a global, but I've never seen any
 			* EDID block wth two range descriptors, so it's harmless.
@@ -381,11 +381,11 @@ class EdidDecode {
 				return 0;
 			}
 		}
-		
+
 		if ($this->seen_non_detailed_descriptor && !$in_extension) {
 			$this->has_valid_descriptor_ordering = 0;
 		}
-		
+
 		$this->did_detailed_timing = 1;
 		$ha = (ord($x[2]) + ((ord($x[4]) & 0xF0) << 4)); // Horizontal Addressable Video
 		$hbl = (ord($x[3]) + ((ord($x[4]) & 0x0F) << 8)); // Hor blanking
@@ -436,11 +436,11 @@ class EdidDecode {
 			$phsync, $pvsync, $syncmethod, (ord($x[17]) & 0x80) ? " interlaced" : ""
 		);
 		/* XXX flag decode */
-		
+
 		$index++;
 		return 1;
 	}
-	
+
 	public function do_checksum($x)
 	{
 		$this->myprintf("Checksum: 0x%x", ord($x[0x7f]));
@@ -458,25 +458,25 @@ class EdidDecode {
 		}
 		$this->myprintf("\n");
 	}
-	
+
 	/* CEA extension */
-	
+
 	public function cea_video_block($x)
 	{
 		$length = ord($x[0]) & 0x1f;
-		
+
 		for ($i = 1; $i < $length; $i++)
 		$this->myprintf("    VIC %02d %s\n", ord($x[$i]) & 0x7f, ord($x[$i]) & 0x80 ? "(native)" : "");
 	}
-	
+
 	public function cea_hdmi_block($x)
 	{
 		$length = ord($x[0]) & 0x1f;
-		
+
 		$this->myprintf(" (HDMI)\n");
 		$this->myprintf("    Source physical address %d.%d.%d.%d\n", ord($x[4]) >> 4, ord($x[4]) & 0x0f,
 		ord($x[5]) >> 4, ord($x[5]) & 0x0f);
-		
+
 		if ($length > 5) {
 			if (ord($x[6]) & 0x80)
 			$this->myprintf("    Supports_AI\n");
@@ -492,17 +492,17 @@ class EdidDecode {
 			if (ord($x[6]) & 0x01)
 			$this->myprintf("    DVI_Dual\n");
 		}
-		
+
 		if ($length > 6)
 		$this->myprintf("    Maximum TMDS clock: %dMHz\n", ord($x[7]) * 5);
-		
+
 		/* latency info */
 	}
-	
+
 	public function cea_block($x)
 	{
 		$oui;
-		
+
 		switch ((ord($x[0]) & 0xe0) >> 5) {
 		case 0x01:
 			$this->myprintf("  Audio data block\n");
@@ -575,20 +575,20 @@ class EdidDecode {
 			}
 		}
 	}
-	
+
 	public function parse_cea($x)
 	{
 		$ret = 0;
 		$version = ord($x[1]);
 		$offset = ord($x[2]);
-		
+
 		if ($version >= 1) do {
 			if ($version == 1 && ord($x[3]) != 0)
 			$ret = 1;
-			
+
 			if ($offset < 4)
 			break;
-			
+
 			if ($version < 3) {
 				$this->myprintf("%d 8-byte timing descriptors\n", ($offset - 4) / 8);
 				if ($offset - 4 > 0)
@@ -599,8 +599,8 @@ class EdidDecode {
 					$this->cea_block(substr($x,$i));
 				}
 			}
-			
-			if ($version >= 2) {    
+
+			if ($version >= 2) {
 				if (ord($x[3]) & 0x80)
 					$this->myprintf("Underscans PC formats by default\n");
 				if (ord($x[3]) & 0x40)
@@ -611,30 +611,30 @@ class EdidDecode {
 					$this->myprintf("Supports YCbCr 4:2:2\n");
 					$this->myprintf("%d native detailed modes\n", ord($x[3]) & 0x0f);
 			}
-			
+
 			for ($i = $offset; $i + 18 < 127; $i += 18)
 				if (ord($x[$i]))
 					$this->detailed_block(substr($x,$i), 1);
-			
+
 		} while (0);
-		
+
 		$this->do_checksum($x);
-		
+
 		return $ret;
 	}
-	
+
 	/* generic extension code */
-	
+
 	public function extension_version($x)
 	{
 		$this->myprintf("Extension version: %d\n", ord($x[1]));
 	}
-	
+
 	public function parse_extension($x)
 	{
 		$conformant_extension = 0;
 		$this->myprintf("\n");
-		
+
 		switch(ord($x[0])) {
 		case 0x02:
 			$this->myprintf("CEA extension block\n");
@@ -651,14 +651,14 @@ class EdidDecode {
 			$this->myprintf("Unknown extension block\n");
 			break;
 		}
-		
+
 		$this->myprintf("\n");
-		
+
 		return $conformant_extension;
 	}
-	
+
 	public $edid_lines = 0;
-	
+
 	public function extract_edid($fd)
 	{
 		$state = 0;
@@ -667,7 +667,7 @@ class EdidDecode {
 
 		$ret = file_get_contents($fd);
 		return $ret; // good enough for now.
-		
+
 		$start = strstr($ret, "EDID_DATA:");
 		if ($start === FALSE) {
 			$start = strstr($ret, "EDID:");
@@ -676,9 +676,9 @@ class EdidDecode {
 		if ($start !== FALSE) {
 			$indentation1 = "                ";
 			$indentation2 = "\t\t";
-			
+
 			for ($i = 0; $i < 8; $i++) {
-				
+
 				/* Get the next start of the line of EDID hex. */
 				$s = strstr($start, $indentation = $indentation1);
 				if (!$s)
@@ -687,7 +687,7 @@ class EdidDecode {
 					return NULL;
 				}
 				$start = $s + strlen($indentation);
-				
+
 				$c = $start;
 				for ($j = 0; $j < 16; $j++) {
 					$buf;
@@ -702,10 +702,10 @@ class EdidDecode {
 					$c += 2;
 				}
 			}
-			
+
 			return $out;
 		}
-		
+
 		/* wait, is this a log file? */
 		for ($i = 0; $i < 8; $i++) {
 			if (!isascii($ret[$i])) {
@@ -713,13 +713,13 @@ class EdidDecode {
 				return $ret;
 			}
 		}
-		
+
 		/* i think it is, let's go scanning */
 		if (!($start = strstr($ret, "EDID (in hex):")))
 		return $ret;
 		if (!($start = strstr($start, "(II)")))
 		return $ret;
-		
+
 		for ($c = $start; $c; $c++) {
 			if ($state == 0) {
 				/* skip ahead to the : */
@@ -744,12 +744,12 @@ class EdidDecode {
 				$c++;
 			}
 		}
-		
+
 		$this->edid_lines = $lines;
-		
+
 		return $out;
 	}
-	
+
 	public $established_timings = array(
 		/* 0x23 bit 7 - 0 */
 		array(720, 400, 70), // x, y, refresh;
@@ -772,11 +772,11 @@ class EdidDecode {
 		/* 0x25 bit 7 */
 		array(1152, 870, 75),
 	);
-	
+
 	public function print_subsection($name, $edid, $start, $end)
 	{
 		$i;
-		
+
 		$this->myprintf("%s:", $name);
 		for ($i = strlen($name); $i < 15; $i++)
 			$this->myprintf(" ");
@@ -784,7 +784,7 @@ class EdidDecode {
 			$this->myprintf(" %02x", ord($edid[$i]));
 		$this->myprintf("\n");
 	}
-	
+
 	public function dump_breakdown($edid)
 	{
 		$this->myprintf("Extracted contents:\n");
@@ -803,7 +803,7 @@ class EdidDecode {
 		$this->print_subsection("checksum", $edid, 127, 127);
 		$this->myprintf("\n");
 	}
-	
+
 	public function main($input,$inputIsBinaryEDID=false)
 	{
 		$result = &$this->result; // Convenience var
@@ -819,9 +819,9 @@ class EdidDecode {
 				return 1;
 			}
 		}
-		
+
 		$this->dump_breakdown($edid);
-		
+
 		if (empty($edid) || !$this->memcmp($edid, "\x00\xFF\xFF\xFF\xFF\xFF\xFF\x00", 8)) {
 			$this->myprintf("No header found\n");
 			return false;
@@ -833,7 +833,7 @@ class EdidDecode {
 		$this->myprintf("Manufacturer: %s Model %x Serial Number %u\n",
 			$result['manufacturer_name'], $result['product_code'], $result['serial_number']);
 		/* XXX need manufacturer ID table */
-		
+
 		$ptm = localtime(time(),true);
 		if (ord($edid[0x10]) < 55 || ord($edid[0x10]) == 0xff) {
 			$this->has_valid_week = 1;
@@ -853,7 +853,7 @@ class EdidDecode {
 				}
 			}
 		}
-		
+
 		$result['version'] = ord($edid[0x12]) . '.' . ord($edid[0x13]);
 		$this->myprintf("EDID version: %s\n", $result['version']);
 		if (ord($edid[0x12]) == 1) {
@@ -873,9 +873,9 @@ class EdidDecode {
 			}
 			$this->claims_one_point_oh = 1;
 		}
-		
+
 		/* display section */
-		
+
 		if (ord($edid[0x14]) & 0x80) {
 			$result['analog'] = false;
 			$analog = 0;
@@ -891,32 +891,20 @@ class EdidDecode {
 					$this->myprintf("%d bits per primary color channel\n",
 						$result['color-bit-depth']);
 				}
-				
+
 				switch (ord($edid[0x14]) & 0x0f) {
 					case 0x00: $this->myprintf("Digital interface is not defined\n"); break;
-					case 0x01:
-						$result['digital-interface'] = 'DVI';
-						$this->myprintf("DVI interface\n");
-						break;
-					case 0x02:
-						$result['digital-interface'] = 'HDMI-a';
-						$this->myprintf("HDMI-a interface\n");
-						break;
-					case 0x03:
-						$result['digital-interface'] = 'HDMI-b';
-						$this->myprintf("HDMI-b interface\n");
-						break;
-					case 0x04:
-						$result['digital-interface'] = 'MDDI';
-						$this->myprintf("MDDI interface\n");
-						break;
-					case 0x05:
-						$result['digital-interface'] = 'DisplayPort';
-						$this->myprintf("DisplayPort interface\n");
-						break;
-					default:
-						$this->nonconformant_digital_display = 1;
+					case 0x01: $result['digital-interface'] = 'DVI'; break;
+					case 0x02: $result['digital-interface'] = 'HDMI-a'; break;
+					case 0x03: $result['digital-interface'] = 'HDMI-b'; break;
+					case 0x04: $result['digital-interface'] = 'MDDI'; break;
+					case 0x05: $result['digital-interface'] = 'DisplayPort'; break;
+					default: $this->nonconformant_digital_display = 1;
 				}
+
+				if (!empty($result['digital-interface']))
+					$this->myprintf($result['digital-interface'] . " interface\n");
+
 			} else if ($this->claims_one_point_two) {
 				$conformance_mask = 0x7E;
 				if (ord($edid[0x14]) & 0x01) {
@@ -931,12 +919,12 @@ class EdidDecode {
 			$voltage = (ord($edid[0x14]) & 0x60) >> 5;
 			$sync = (ord($edid[0x14]) & 0x0F);
 			$result['input-voltage-level'] =
-				($voltage == 3 ? "0.7/0.7" :
-				($voltage == 2 ? "1.0/0.4" :
-				($voltage == 1 ? "0.714/0.286" : "0.7/0.3")));
+				$voltage == 3 ? "0.7/0.7" :
+				 ($voltage == 2 ? "1.0/0.4" :
+				  ($voltage == 1 ? "0.714/0.286" : "0.7/0.3"));
 			$this->myprintf("Analog display, Input voltage level: %s V\n",
 				$result['input-voltage-level']);
-			
+
 			if ($this->claims_one_point_four) {
 				$result['video-setup'] = (ord($edid[0x14]) & 0x10) ?
 					'Blank-to-black setup/pedestal' : 'Blank level equals black level';
@@ -949,7 +937,7 @@ class EdidDecode {
 				*/
 				$this->myprintf("Configurable signal levels\n");
 			}
-			
+
 			$result['sync'] =
 				($sync & 0x08 ? "Separate "    : "") .
 				($sync & 0x04 ? "Composite "   : "") .
@@ -957,7 +945,7 @@ class EdidDecode {
 				($sync & 0x01 ? "Serration "   : "");
 			$this->myprintf("Sync: %s\n", $result['sync']);
 		}
-		
+
 		if (ord($edid[0x15]) && ord($edid[0x16])) {
 			$result['max-image-size'] = ord($edid[0x15]) . ' cm x ' . ord($edid[0x16]) . ' cm';
 			$this->myprintf("Maximum image size: %s\n", $result['max-image-size']);
@@ -972,7 +960,7 @@ class EdidDecode {
 			/* Either or both can be zero for 1.3 and before */
 			$this->myprintf("Image size is variable\n");
 		}
-		
+
 		if (ord($edid[0x17]) == 0xff) {
 			if ($this->claims_one_point_four)
 				$this->myprintf("Gamma is defined in an extension block\n");
@@ -985,7 +973,7 @@ class EdidDecode {
 			$result['gamma'] = ((ord($edid[0x17]) + 100.0) / 100.0);
 			$this->myprintf("Gamma: %.2f\n", $result['gamma']);
 		}
-		
+
 		if (ord($edid[0x18]) & 0xE0) {
 			$result['dpms'] = ltrim(
 				(ord($edid[0x18]) & 0x80 ? " Standby" : '') .
@@ -993,7 +981,7 @@ class EdidDecode {
 				(ord($edid[0x18]) & 0x20 ? " Off" : ''));
 			$this->myprintf("DPMS levels: %s\n",$result['dpms']);
 		}
-		
+
 		/* FIXME: this is from 1.4 spec, check earlier */
 		if ($analog) {
 			switch (ord($edid[0x18]) & 0x18) {
@@ -1006,11 +994,11 @@ class EdidDecode {
 				$this->myprintf($result['color-type'] . "\n");
 		} else {
 			$result['color-formats'] = 'RGB 4:4:4' .
-				(ord($edid[0x18]) & 0x10 ? ', YCrCb 4:4:4' : '') . 
+				(ord($edid[0x18]) & 0x10 ? ', YCrCb 4:4:4' : '') .
 				(ord($edid[0x18]) & 0x08 ? ', YCrCb 4:2:2' : '');
 			$this->myprintf("Supported color formats: %s\n", $result['color-formats']);
 		}
-		
+
 		$result['uses-srgb-standard-color-space'] = (bool)(ord($edid[0x18]) & 0x04);
 		$result['has_preferred_timing'] = ord($edid[0x18]) & 0x02;
 		$result['supports-gtf-timings'] = ord($edid[0x18]) & 0x01;
@@ -1022,9 +1010,9 @@ class EdidDecode {
 		}
 		if ($result['supports-gtf-timings'])
 			$this->myprintf("Supports GTF timings within operating range\n");
-		
+
 		/* XXX color section */
-		
+
 		$this->myprintf("Established timings supported:\n");
 		for ($i = 0; $i < 17; $i++) {
 			if (ord($edid[0x23 + $i / 8]) & (1 << (7 - $i % 8))) {
@@ -1034,15 +1022,15 @@ class EdidDecode {
 				$this->myprintf("  $timing\n");
 			}
 		}
-		
+
 		$this->myprintf("Standard timings supported:\n");
 		for ($i = 0; $i < 8; $i++) {
 			$b1 = ord($edid[0x26 + $i * 2]);
 			$b2 = ord($edid[0x26 + $i * 2 + 1]);
-			
+
 			if ($b1 == 0x01 && $b2 == 0x01)
 				continue;
-			
+
 			if ($b1 == 0) {
 				$this->myprintf("non-conformant standard timing (0 horiz)\n");
 				continue;
@@ -1063,11 +1051,11 @@ class EdidDecode {
 				break;
 			}
 			$refresh = 60 + ($b2 & 0x3f);
-			
+
 			$timing = $this->result_add_timing($x, $y, $refresh);
 			$this->myprintf("  $timing\n");
 		}
-		
+
 		/* detailed timings */
 		$this->has_valid_detailed_blocks = $this->detailed_block(substr($edid,0x36), 0);
 		if ($this->has_preferred_timing && !$this->did_detailed_timing)
@@ -1075,7 +1063,7 @@ class EdidDecode {
 		$this->has_valid_detailed_blocks &= $this->detailed_block(substr($edid,0x48), 0);
 		$this->has_valid_detailed_blocks &= $this->detailed_block(substr($edid,0x5A), 0);
 		$this->has_valid_detailed_blocks &= $this->detailed_block(substr($edid,0x6C), 0);
-		
+
 		/* check this, 1.4 verification guide says otherwise */
 		if (ord($edid[0x7e])) {
 			$this->myprintf("Has %d extension blocks\n", ord($edid[0x7e]));
@@ -1085,14 +1073,14 @@ class EdidDecode {
 		} else {
 			$this->has_valid_extension_count = 1;
 		}
-		
+
 		$this->do_checksum($edid);
-		
+
 		$len = strlen($edid);
 		for ($i = 128;$i < $len;$i += 128) {
 			$this->nonconformant_digital_display += $this->parse_extension(substr($edid,$i));
 		}
-		
+
 		if ($this->claims_one_point_three) {
 			if ($this->nonconformant_digital_display ||
 					!$this->has_valid_descriptor_pad ||
@@ -1135,7 +1123,7 @@ class EdidDecode {
 			if ($this->seen_non_detailed_descriptor)
 				$this->myprintf("\tHas descriptor blocks other than detailed timings\n");
 		}
-		
+
 		if ($this->nonconformant_extension ||
 				!$this->has_valid_checksum ||
 				!$this->has_valid_cvt ||
@@ -1174,12 +1162,12 @@ class EdidDecode {
 			if (!$this->has_valid_max_dotclock)
 				$this->myprintf("\tEDID 1.4 block does not set max dotclock\n");
 		}
-		
+
 		if ($this->warning_excessive_dotclock_correction)
 			$this->myprintf("Warning: CVT block corrects dotclock by more than 9.75MHz\n");
 		if ($this->warning_zero_preferred_refresh)
 			$this->myprintf("Warning: CVT block does not set preferred refresh rate\n");
-		
+
 		return !$this->conformant;
 	}
 
@@ -1192,16 +1180,16 @@ class EdidDecode {
 		}
 		return true;
 	}
-	
+
 	public function isupper($i)
 	{
 		return (strtoupper($i) === $i);
 	}
-	
+
 	public function islower($i) {
 		return (strtolower($i) === $i);
 	}
-	
+
 	public function result_add_timing($x,$y,$refresh,$preferred=false)
 	{
 		$str = "${x}x${y}@${refresh}Hz";
@@ -1215,9 +1203,9 @@ class EdidDecode {
 		}
 		return $str;
 	}
-	
+
 	/*
-	 * Parses EDIDs as exported by regedit -- 
+	 * Parses EDIDs as exported by regedit --
 	 * [HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Enum\DISPLAY\DELD028\5&27bbed36&0&UID16777489\Device Parameters]
 	 * "EDID"=hex:00,ff,ff,ff,ff,ff,ff,00,10,ac,28,d0,4c,39,36,30,31,13,01,03,80,33,\
 	 *   1d,78,2e,ee,95,a3,54,4c,99,26,0f,50,54,a5,4b,00,71,4f,81,80,d1,c0,01,01,01,\
@@ -1225,7 +1213,7 @@ class EdidDecode {
 	 *   00,00,00,ff,00,4e,39,31,38,52,39,43,32,30,36,39,4c,0a,00,00,00,fc,00,44,45,\
 	 *   4c,4c,20,50,32,33,31,30,48,0a,20,00,00,00,fd,00,38,4c,1e,53,11,00,0a,20,20,\
 	 *   20,20,20,20,00,b2
-	 */	
+	 */
 	static public function regedit_decode($string)
 	{
 		$ret = '';
@@ -1239,7 +1227,7 @@ class EdidDecode {
 
 		return $ret;
 	}
-	
+
 	public function myprintf()
 	{
 		if ($this->_output) {
