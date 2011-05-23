@@ -378,7 +378,7 @@ class EdidDecode {
 					$result['serial_number'] = rtrim(substr($result['serial_number'],0,strpos($x,"\x0")));
 				}
 				if (!$this->_hideserial) { // C code has a bug which shows garbage after serial, making our tests fail
-					printf("Serial number: %s\n", $result['serial_number']);
+					$this->myprintf("Serial number: %s\n", $result['serial_number']);
 				}
 				return 1;
 			default:
