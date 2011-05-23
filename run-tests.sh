@@ -3,6 +3,9 @@
 # Create c version (without buggy serial code)
 make edid-decode-noserial
 
+# Set php version to run in tests mode
+export EDID_DECODE_TESTS=1
+
 for i in data/*
 do
     # We grep -v garbage due to uninitialized conformant_extension variable in parse_extension()

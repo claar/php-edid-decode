@@ -25,8 +25,9 @@
 
 class EdidDecode {
 
-	public $_debug = false; // Whether to output additional debug information
 	public $_output = true; // Whether to output anything
+	public $_debug = false; // Whether to output additional debug information
+	public $_hideserial = false; // Whether to output the serial number (allows tests to succeed)
 	public $result_str = ''; // A saved copy of the output
 	public $result = array(); // The decoded EDID
 
@@ -373,7 +374,12 @@ class EdidDecode {
 			case 0xFF:
 				/* XXX check: terminated with 0x0A, padded with 0x20 */
 				$result['serial_number'] = rtrim(substr($x,5,(strpos($x,"\x0A")-(5-1))));
-				//printf("Serial number: %s", $result['serial_number']);
+				if (strpos($result['serial_number'],"\x0")!==false) { // failsafe to handle odd serials
+					$result['serial_number'] = rtrim(substr($result['serial_number'],0,strpos($x,"\x0")));
+				}
+				if (!$this->_hideserial) { // C code has a bug which shows garbage after serial, making our tests fail
+					printf("Serial number: %s\n", $result['serial_number']);
+				}
 				return 1;
 			default:
 				$this->myprintf("Unknown monitor description type %d\n", ord($x[3]));
@@ -1237,10 +1243,11 @@ class EdidDecode {
 
 	public function myprintf()
 	{
-		$this->result_str .= call_user_func_array('sprintf',func_get_args());
+		$result = call_user_func_array('sprintf',func_get_args());
+		$this->result_str .= $result;
 		if ($this->_output) {
-			echo $this->result_str;
-			return strlen($this->result_str);
+			echo $result;
+			return strlen($result);
 		}
 		return 0;
 	}

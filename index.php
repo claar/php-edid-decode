@@ -36,6 +36,7 @@ $input = null;
 if (defined('PHP_SAPI') && PHP_SAPI=='cli') {
 	$edidDecode->_cli = true;
 	$input = isset($GLOBALS['argv'][1]) ? $GLOBALS['argv'][1] : 'php://stdin';
+	if (isset($_ENV['EDID_DECODE_TESTS'])) $edidDecode->_hideserial = true;
 	$conformant = $edidDecode->main($input);
 	exit((int)$conformant);
 
