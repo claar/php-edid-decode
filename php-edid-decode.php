@@ -205,7 +205,7 @@ class EdidDecode {
 				return 1;
 			case 0xFC:
 				/* XXX should check for spaces after the \n */
-				/* XXX check: terminated with 0x0A, padded with 0x20 */
+				/* XXX check: terminated with 0x0A (\n), padded with 0x20 (space) */
 				$this->has_name_descriptor = 1;
 				if (strchr($name, "\n")) return 1;
 				$name = substr($x,5,13);
@@ -368,15 +368,14 @@ class EdidDecode {
 				* TODO: Two of these in a row, in the third and fouth slots,
 				* seems to be specified by SPWG: http://www.spwg.org/
 				*/
-				/* XXX check: terminated with 0x0A, padded with 0x20 */
-				$this->myprintf("ASCII string: %s", substr($x,5,(strpos($x,"\x0A")-(5-1))));
+				/* XXX check: terminated with 0x0A (which is \n), padded with 0x20 (a space)*/
+				$x = substr($x,5);
+				$this->myprintf("ASCII string: %s", preg_replace("#^(.*?)\s.*#s",'$1',$x));
 				return 1;
 			case 0xFF:
-				/* XXX check: terminated with 0x0A, padded with 0x20 */
-				$result['serial_number'] = rtrim(substr($x,5,(strpos($x,"\x0A")-(5-1))));
-				if (strpos($result['serial_number'],"\x0")!==false) { // failsafe to handle odd serials
-					$result['serial_number'] = rtrim(substr($result['serial_number'],0,strpos($x,"\x0")));
-				}
+				/* XXX check: terminated with 0x0A (which is \n), padded with 0x20 (a space) */
+				$x = substr($x,5);
+				$result['serial_number'] = preg_replace("#^(.*?)\s.*#s",'$1',$x);
 				if (!$this->_hideserial) { // C code has a bug which shows garbage after serial, making our tests fail
 					$this->myprintf("Serial number: %s\n", $result['serial_number']);
 				}
